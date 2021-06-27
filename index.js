@@ -2,6 +2,8 @@
 const path = require('path')
 const Koa = require('koa')
 const send = require('koa-send')
+const compilerSFC = require('@vue/compiler-sfc')
+const { Readable } = require('stream')
 
 const app = new Koa()
 
@@ -13,6 +15,12 @@ const streamToString = (stream) =>
     stream.on('error', reject)
   })
 
+const stringToStream = (text) => {
+  const stream = new Readable()
+  stream.push(text)
+  stream.push(null)
+  return stream
+}
 // 3. 加载第三方模块
 app.use(async (ctx, next) => {
   // ctx.path --> /@modules/
@@ -33,6 +41,27 @@ app.use(async (ctx, next) => {
 // 1. 静态文件服务器
 app.use(async (ctx, next) => {
   await send(ctx, ctx.path, { root: process.cwd(), index: 'index.html' })
+  await next()
+})
+
+// 4. 处理单文件组件
+app.use(async (ctx, next) => {
+  if (ctx.path.endsWith('.vue')) {
+    const contents = await streamToString(ctx.body)
+    const { descriptor } = compilerSFC.parse(contents)
+    let code
+    if (!ctx.query.type) {
+      code = descriptor.script.content
+      code = code.replace(/export\s+default\s+/g, 'const __script = ')
+      code += `
+      import { render as __render } from "${ctx.path}?type=template"
+      __script.render = __render
+      export default __script
+      `
+    }
+    ctx.type = 'application/javascript'
+    ctx.body = stringToStream(code)
+  }
   await next()
 })
 
