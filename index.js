@@ -58,6 +58,11 @@ app.use(async (ctx, next) => {
       __script.render = __render
       export default __script
       `
+    } else if (ctx.query.type === 'template') {
+      const templateRender = compilerSFC.compileTemplate({
+        source: descriptor.template.content,
+      })
+      code = templateRender.code
     }
     ctx.type = 'application/javascript'
     ctx.body = stringToStream(code)
@@ -69,7 +74,9 @@ app.use(async (ctx, next) => {
 app.use(async (ctx, next) => {
   if (ctx.type === 'application/javascript') {
     const contents = await streamToString(ctx.body)
-    ctx.body = contents.replace(/(from\s+['"])(?![\.\/]))/g, '$1/@modules/')
+    ctx.body = contents
+      .replace(/(from\s+['"])(?![\.\/]))/g, '$1/@modules/')
+      .replace(/process\.env\.NODE_ENV/g, '"development"')
   }
   await next()
 })
