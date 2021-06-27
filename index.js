@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const path = require('path')
 const Koa = require('koa')
 const send = require('koa-send')
 
@@ -11,6 +12,23 @@ const streamToString = (stream) =>
     stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
     stream.on('error', reject)
   })
+
+// 3. 加载第三方模块
+app.use(async (ctx, next) => {
+  // ctx.path --> /@modules/
+  if (ctx.path.startsWith('/@modules/')) {
+    const moduleName = ctx.path.substr(10)
+    const pkgPath = path.join(
+      process.cwd(),
+      'node_modules',
+      moduleName,
+      'package.json'
+    )
+    const pkg = require(pkgPath)
+    ctx.path = path.join('/node_modules', moduleName, pkg.module)
+  }
+  await next()
+})
 
 // 1. 静态文件服务器
 app.use(async (ctx, next) => {
